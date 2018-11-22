@@ -775,6 +775,8 @@ fn check_matcher_core(sess: &ParseSess,
                     new.add_one_maybe(TokenTree::Token(delim_sp.entire(), u.clone()));
                     &new
                 } else {
+                    // Verify that a fragment isn't followed by an invalid fragment type through
+                    // repetition.
                     if let (
                         Some(tok),
                         Some(TokenTree::MetaVarDecl(sp, name, frag_spec)),
@@ -786,7 +788,7 @@ fn check_matcher_core(sess: &ParseSess,
                                 let next = if *sp == tok_sp {
                                     "itself".to_owned()
                                 } else {
-                                    format!("`{}`", quoted_tt_to_string(tok))
+                                    quoted_tt_to_string(tok)
                                 };
                                 let mut err = sess.span_diagnostic.struct_span_warn(
                                     *sp,
@@ -817,8 +819,8 @@ fn check_matcher_core(sess: &ParseSess,
                                 }
                                 let sugg_span = sess.source_map().next_point(delim_sp.close);
                                 let msg = "allowed there are: ";
-                                let sugg_msg = "add a valid separator for the repetition to be \
-                                                unambiguous";
+                                let sugg_msg =
+                                    "add a valid separator for the repetition to be unambiguous";
                                 match &possible[..] {
                                     &[] => {}
                                     &[t] => {
@@ -914,7 +916,7 @@ fn check_matcher_core(sess: &ParseSess,
                             let sp = next_token.span();
                             let mut err = sess.span_diagnostic.struct_span_err(
                                 sp,
-                                &format!("`${name}:{frag}` {may_be} followed by `{next}`, which \
+                                &format!("`${name}:{frag}` {may_be} followed by {next}, which \
                                           is not allowed for `{frag}` fragments",
                                          name=name,
                                          frag=frag_spec,
@@ -1140,9 +1142,13 @@ fn is_legal_fragment_specifier(sess: &ParseSess,
 
 fn quoted_tt_to_string(tt: &quoted::TokenTree) -> String {
     match *tt {
-        quoted::TokenTree::Token(_, ref tok) => ::print::pprust::token_to_string(tok),
-        quoted::TokenTree::MetaVar(_, name) => format!("${}", name),
-        quoted::TokenTree::MetaVarDecl(_, name, kind) => format!("${}:{}", name, kind),
-        ref tt => panic!("unexpected {:?} in follow set checker", tt),
+        quoted::TokenTree::Token(_, ref tok) => format!(
+            "`{}`",
+            ::print::pprust::token_to_string(tok),
+        ),
+        quoted::TokenTree::MetaVar(_, name) => format!("`${}`", name),
+        quoted::TokenTree::MetaVarDecl(_, name, kind) => format!("`${}:{}`", name, kind),
+        quoted::TokenTree::Delimited(..) => "a delimited token tree".to_owned(),
+        quoted::TokenTree::Sequence(..) => "a sequence".to_owned(),
     }
 }
